@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { supabase, auth } from '../services/supabase';
+import { supabase } from '../services/supabase';
 
 const AuthContext = createContext();
 
@@ -9,7 +9,7 @@ export function AuthProvider({ children }) {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    // Check active sessions
+    // Check active session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
       setLoading(false);
@@ -25,38 +25,30 @@ export function AuthProvider({ children }) {
   }, []);
 
   const signUp = async (email, password) => {
-    try {
-      setError(null);
-      const { data, error } = await auth.signUp(email, password);
-      if (error) throw error;
-      return data;
-    } catch (err) {
-      setError(err.message);
-      throw err;
-    }
+    setError(null);
+    const { data, error: signUpError } = await supabase.auth.signUp({
+      email,
+      password,
+    });
+    if (signUpError) throw signUpError;
+    return data;
   };
 
   const signIn = async (email, password) => {
-    try {
-      setError(null);
-      const { data, error } = await auth.signIn(email, password);
-      if (error) throw error;
-      return data;
-    } catch (err) {
-      setError(err.message);
-      throw err;
-    }
+    setError(null);
+    const { data, error: signInError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+    if (signInError) throw signInError;
+    return data;
   };
 
   const signOut = async () => {
-    try {
-      setError(null);
-      const { error } = await auth.signOut();
-      if (error) throw error;
-    } catch (err) {
-      setError(err.message);
-      throw err;
-    }
+    setError(null);
+    const { error: signOutError } = await supabase.auth.signOut();
+    if (signOutError) throw signOutError;
+    setUser(null);
   };
 
   const value = {
