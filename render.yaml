@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: atmosync
+    env: static
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./dist
+    envVars:
+      - key: VITE_OPENWEATHER_API_KEY
+        sync: false
+      - key: VITE_WEATHERAPI_KEY
+        sync: false
+      - key: VITE_AIRVISUAL_API_KEY
+        sync: false
+      - key: VITE_SUPABASE_URL
+        sync: false
+      - key: VITE_SUPABASE_ANON_KEY
+        sync: false
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
