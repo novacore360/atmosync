@@ -2,37 +2,36 @@ import axios from 'axios';
 
 const OPENWEATHER_API_KEY = import.meta.env.VITE_OPENWEATHER_API_KEY;
 const WEATHERAPI_KEY = import.meta.env.VITE_WEATHERAPI_KEY;
-const AIRVISUAL_API_KEY = import.meta.env.VITE_AIRVISUAL_API_KEY;
-
-const openWeatherClient = axios.create({
-  baseURL: 'https://api.openweathermap.org/data/3.0',
-  params: {
-    appid: OPENWEATHER_API_KEY,
-    units: 'metric',
-  },
-});
-
-const weatherApiClient = axios.create({
-  baseURL: 'https://api.weatherapi.com/v1',
-  params: {
-    key: WEATHERAPI_KEY,
-  },
-});
 
 export const weatherApi = {
   async getCurrentWeather(lat, lon) {
+    console.log('Fetching weather for:', lat, lon);
+    console.log('API Key exists:', !!OPENWEATHER_API_KEY);
+    
     try {
-      const response = await openWeatherClient.get('/onecall', {
-        params: { lat, lon, exclude: 'minutely,alerts' },
-      });
-      
+      // Try OpenWeather first
+      const response = await axios.get(
+        'https://api.openweathermap.org/data/3.0/onecall',
+        {
+          params: {
+            lat,
+            lon,
+            appid: OPENWEATHER_API_KEY,
+            units: 'metric',
+            exclude: 'minutely,alerts',
+          },
+        }
+      );
+
       const data = response.data.current;
+      console.log('Weather data received:', data);
+      
       return {
         temp: Math.round(data.temp),
         feelsLike: Math.round(data.feels_like),
         humidity: data.humidity,
         pressure: data.pressure,
-        visibility: data.visibility,
+        visibility: data.visibility || 10000,
         windSpeed: data.wind_speed,
         windDeg: data.wind_deg,
         uvi: data.uvi,
@@ -40,49 +39,72 @@ export const weatherApi = {
         sunset: data.sunset,
         weather: data.weather,
         clouds: data.clouds,
-        dewPoint: data.dew_point,
+        dewPoint: data.dew_point || 0,
       };
     } catch (error) {
-      // Fallback to WeatherAPI
-      const response = await weatherApiClient.get('/current.json', {
-        params: { q: `${lat},${lon}` },
-      });
+      console.error('OpenWeather failed, trying WeatherAPI...', error.message);
       
-      const data = response.data.current;
-      return {
-        temp: data.temp_c,
-        feelsLike: data.feelslike_c,
-        humidity: data.humidity,
-        pressure: data.pressure_mb,
-        visibility: data.vis_km * 1000,
-        windSpeed: data.wind_kph / 3.6,
-        windDeg: data.wind_degree,
-        uvi: data.uv,
-        weather: [{ main: data.condition.text, icon: data.condition.icon }],
-        clouds: data.cloud,
-      };
+      // Fallback to WeatherAPI
+      try {
+        const response = await axios.get(
+          'https://api.weatherapi.com/v1/current.json',
+          {
+            params: {
+              key: WEATHERAPI_KEY,
+              q: `${lat},${lon}`,
+            },
+          }
+        );
+
+        const data = response.data.current;
+        return {
+          temp: Math.round(data.temp_c),
+          feelsLike: Math.round(data.feelslike_c),
+          humidity: data.humidity,
+          pressure: data.pressure_mb,
+          visibility: data.vis_km * 1000,
+          windSpeed: data.wind_kph / 3.6,
+          windDeg: data.wind_degree,
+          uvi: data.uv,
+          weather: [{ main: data.condition.text, description: data.condition.text }],
+          clouds: data.cloud,
+          dewPoint: 0,
+          sunrise: 0,
+          sunset: 0,
+        };
+      } catch (fallbackError) {
+        console.error('Both APIs failed:', fallbackError.message);
+        throw new Error('Unable to fetch weather data. Please check your API keys.');
+      }
     }
   },
 
   async getForecast(lat, lon) {
     try {
-      const response = await weatherApiClient.get('/forecast.json', {
-        params: { q: `${lat},${lon}`, days: 7 },
-      });
-      
+      const response = await axios.get(
+        'https://api.weatherapi.com/v1/forecast.json',
+        {
+          params: {
+            key: WEATHERAPI_KEY,
+            q: `${lat},${lon}`,
+            days: 7,
+          },
+        }
+      );
+
       const forecastDays = response.data.forecast.forecastday;
-      
+
       return {
-        hourly: forecastDays[0].hour.map(hour => ({
+        hourly: forecastDays[0].hour.map((hour) => ({
           time: hour.time,
           temp: hour.temp_c,
           feelsLike: hour.feelslike_c,
           humidity: hour.humidity,
           windSpeed: hour.wind_kph / 3.6,
           rainProbability: hour.chance_of_rain,
-          weather: hour.condition,
+          weather: { text: hour.condition.text },
         })),
-        daily: forecastDays.map(day => ({
+        daily: forecastDays.map((day) => ({
           date: day.date,
           maxTemp: day.day.maxtemp_c,
           minTemp: day.day.mintemp_c,
@@ -91,30 +113,34 @@ export const weatherApi = {
           windSpeed: day.day.maxwind_kph / 3.6,
           rainProbability: day.day.daily_chance_of_rain,
           uvIndex: day.day.uv,
-          condition: day.day.condition,
+          condition: { text: day.day.condition.text },
           sunrise: day.astro.sunrise,
           sunset: day.astro.sunset,
         })),
       };
     } catch (error) {
-      console.error('Error fetching forecast:', error);
-      throw error;
+      console.error('Forecast fetch failed:', error.message);
+      // Return empty data instead of throwing
+      return {
+        hourly: [],
+        daily: [],
+      };
     }
   },
 
   async getAirQuality(lat, lon) {
     try {
       const response = await axios.get(
-        `https://api.airvisual.com/v2/nearest_city`,
+        'https://api.airvisual.com/v2/nearest_city',
         {
           params: {
             lat,
             lon,
-            key: AIRVISUAL_API_KEY,
+            key: import.meta.env.VITE_AIRVISUAL_API_KEY,
           },
         }
       );
-      
+
       const data = response.data.data.current.pollution;
       return {
         aqi: data.aqius,
@@ -129,7 +155,8 @@ export const weatherApi = {
         },
       };
     } catch (error) {
-      // Return mock data if API fails
+      console.error('Air quality fetch failed:', error.message);
+      // Return mock data
       return {
         aqi: 50,
         mainPollutant: 'p2',
@@ -142,22 +169,6 @@ export const weatherApi = {
           co: 300,
         },
       };
-    }
-  },
-
-  async getWeatherAlerts(lat, lon) {
-    try {
-      const response = await openWeatherClient.get('/onecall', {
-        params: {
-          lat,
-          lon,
-          exclude: 'current,minutely,hourly,daily',
-        },
-      });
-      
-      return response.data.alerts || [];
-    } catch (error) {
-      return [];
     }
   },
 };
