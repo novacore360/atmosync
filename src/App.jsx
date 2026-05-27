@@ -4,41 +4,52 @@ import { AnimatePresence } from 'framer-motion';
 import { ThemeProvider } from './context/ThemeContext';
 import { WeatherProvider } from './context/WeatherContext';
 import { AuthProvider } from './context/AuthContext';
-import Navigation from './components/Layout/Navigation';
+import Layout from './components/Layout/Layout';
+import ErrorBoundary from './components/UI/ErrorBoundary';
 import LoadingSpinner from './components/UI/LoadingSpinner';
 
+// Lazy load pages
 const Home = lazy(() => import('./pages/Home'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Goals = lazy(() => import('./pages/Goals'));
 const Statistics = lazy(() => import('./pages/Statistics'));
 const Alerts = lazy(() => import('./pages/Alerts'));
 const Settings = lazy(() => import('./pages/Settings'));
+const Auth = lazy(() => import('./pages/Auth'));
+const Profile = lazy(() => import('./pages/Profile'));
+const EmergencyMode = lazy(() => import('./pages/EmergencyMode'));
+const NotFound = lazy(() => import('./pages/NotFound'));
 
 function App() {
   return (
-    <ThemeProvider>
-      <AuthProvider>
-        <WeatherProvider>
-          <Router>
-            <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white">
-              <Suspense fallback={<LoadingSpinner />}>
-                <AnimatePresence mode="wait">
-                  <Routes>
-                    <Route path="/" element={<Home />} />
-                    <Route path="/dashboard" element={<Dashboard />} />
-                    <Route path="/goals" element={<Goals />} />
-                    <Route path="/statistics" element={<Statistics />} />
-                    <Route path="/alerts" element={<Alerts />} />
-                    <Route path="/settings" element={<Settings />} />
-                  </Routes>
-                </AnimatePresence>
-              </Suspense>
-              <Navigation />
-            </div>
-          </Router>
-        </WeatherProvider>
-      </AuthProvider>
-    </ThemeProvider>
+    <ErrorBoundary>
+      <ThemeProvider>
+        <AuthProvider>
+          <WeatherProvider>
+            <Router>
+              <Layout>
+                <Suspense fallback={<LoadingSpinner />}>
+                  <AnimatePresence mode="wait">
+                    <Routes>
+                      <Route path="/" element={<Home />} />
+                      <Route path="/dashboard" element={<Dashboard />} />
+                      <Route path="/goals" element={<Goals />} />
+                      <Route path="/statistics" element={<Statistics />} />
+                      <Route path="/alerts" element={<Alerts />} />
+                      <Route path="/settings" element={<Settings />} />
+                      <Route path="/auth" element={<Auth />} />
+                      <Route path="/profile" element={<Profile />} />
+                      <Route path="/emergency" element={<EmergencyMode />} />
+                      <Route path="*" element={<NotFound />} />
+                    </Routes>
+                  </AnimatePresence>
+                </Suspense>
+              </Layout>
+            </Router>
+          </WeatherProvider>
+        </AuthProvider>
+      </ThemeProvider>
+    </ErrorBoundary>
   );
 }
 
