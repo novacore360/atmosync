@@ -16,16 +16,6 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
 });
 
-// Database schema types
-/*
-Tables:
-- profiles (id, email, created_at, preferences)
-- weather_history (id, user_id, location, data, timestamp)
-- goals (id, user_id, type, target, current, created_at)
-- sync_queue (id, user_id, action, status, timestamp)
-- alerts (id, user_id, type, message, read, created_at)
-*/
-
 // Auth helper functions
 export const auth = {
   signUp: async (email, password) => {
@@ -55,7 +45,8 @@ export const auth = {
   },
 };
 
-// Database helper functionsexport const db = {
+// Database helper functions
+export const db = {
   // Goals
   saveGoal: async (goal) => {
     const { data, error } = await supabase
