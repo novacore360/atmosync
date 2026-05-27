@@ -2,7 +2,6 @@ import React, { createContext, useContext, useReducer, useEffect, useCallback } 
 import { useGeolocation } from '../hooks/useGeolocation';
 import { weatherApi } from '../services/weatherApi';
 import { offlineStorage } from '../services/offlineStorage';
-import { useOfflineSync } from '../hooks/useOfflineSync';
 
 const WeatherContext = createContext();
 
@@ -24,8 +23,8 @@ function weatherReducer(state, action) {
       return {
         ...state,
         currentWeather: action.payload.current,
-        hourlyForecast: action.payload.hourly,
-        weeklyForecast: action.payload.weekly,
+        hourlyForecast: action.payload.hourly || [],
+        weeklyForecast: action.payload.weekly || [],
         airQuality: action.payload.airQuality,
         weatherAlerts: action.payload.alerts || [],
         loading: false,
@@ -38,8 +37,6 @@ function weatherReducer(state, action) {
       return { ...state, error: action.payload, loading: false };
     case 'SET_SUGGESTIONS':
       return { ...state, suggestions: action.payload };
-    case 'UPDATE_ALERTS':
-      return { ...state, weatherAlerts: action.payload };
     default:
       return state;
   }
@@ -48,62 +45,33 @@ function weatherReducer(state, action) {
 export function WeatherProvider({ children }) {
   const [state, dispatch] = useReducer(weatherReducer, initialState);
   const { location, error: locationError } = useGeolocation();
-  const { isOnline, syncData } = useOfflineSync();
 
   const generateSmartSuggestions = useCallback((weatherData) => {
-    const suggestions = [];
-    const { main, weather, wind, visibility } = weatherData;
+    if (!weatherData) return [];
     
-    // Temperature-based suggestions
-    if (main.temp > 30) {
+    const suggestions = [];
+    const temp = weatherData.temp;
+    const condition = weatherData.weather?.[0]?.main;
+
+    if (temp > 30) {
       suggestions.push({
         type: 'warning',
         message: 'High temperature alert',
-        items: [
-          'Drink plenty of water',
-          'Avoid direct sunlight',
-          'Use SPF 50+ sunscreen',
-          'Take frequent breaks in shade'
-        ]
+        items: ['Drink plenty of water', 'Avoid direct sunlight', 'Use SPF 50+ sunscreen', 'Take frequent breaks in shade'],
       });
-    } else if (main.temp < 10) {
+    } else if (temp < 10) {
       suggestions.push({
         type: 'info',
         message: 'Cold weather advisory',
-        items: [
-          'Wear warm layers',
-          'Protect extremities',
-          'Limit outdoor exposure',
-          'Stay hydrated despite cold'
-        ]
+        items: ['Wear warm layers', 'Protect extremities', 'Limit outdoor exposure', 'Stay hydrated despite cold'],
       });
     }
 
-    // Weather condition suggestions
-    if (weather[0].main === 'Rain') {
+    if (condition === 'Rain') {
       suggestions.push({
         type: 'warning',
         message: 'Rain alert',
-        items: [
-          'Carry an umbrella',
-          'Drive carefully',
-          'Avoid flooded areas',
-          'Wear waterproof clothing'
-        ]
-      });
-    }
-
-    // UV index suggestions
-    if (main.uvi > 6) {
-      suggestions.push({
-        type: 'danger',
-        message: 'High UV Index',
-        items: [
-          'Apply sunscreen every 2 hours',
-          'Wear UV-protective sunglasses',
-          'Seek shade between 10 AM - 4 PM',
-          'Wear a wide-brimmed hat'
-        ]
+        items: ['Carry an umbrella', 'Drive carefully', 'Avoid flooded areas', 'Wear waterproof clothing'],
       });
     }
 
@@ -112,45 +80,45 @@ export function WeatherProvider({ children }) {
 
   const fetchWeatherData = useCallback(async (lat, lon) => {
     dispatch({ type: 'SET_LOADING', payload: true });
-    
+
     try {
-      let weatherData;
+      console.log('Fetching weather data...');
       
-      if (isOnline) {
-        const [currentWeather, forecast, airQuality] = await Promise.all([
-          weatherApi.getCurrentWeather(lat, lon),
-          weatherApi.getForecast(lat, lon),
-          weatherApi.getAirQuality(lat, lon),
-        ]);
+      const currentWeather = await weatherApi.getCurrentWeather(lat, lon);
+      console.log('Current weather:', currentWeather);
+      
+      const forecast = await weatherApi.getForecast(lat, lon);
+      console.log('Forecast:', forecast);
+      
+      const airQuality = await weatherApi.getAirQuality(lat, lon);
+      console.log('Air quality:', airQuality);
 
-        weatherData = {
-          current: currentWeather,
-          hourly: forecast.hourly.slice(0, 24),
-          weekly: forecast.daily,
-          airQuality: airQuality,
-          alerts: currentWeather.alerts || [],
-        };
+      const weatherData = {
+        current: currentWeather,
+        hourly: forecast?.hourly || [],
+        weekly: forecast?.daily || [],
+        airQuality: airQuality,
+        alerts: [],
+      };
 
-        // Cache data for offline use
-        await offlineStorage.saveWeatherData(weatherData);
-      } else {
-        // Load from cache when offline
-        weatherData = await offlineStorage.getWeatherData();
-        if (!weatherData) {
-          throw new Error('No cached weather data available');
-        }
-      }
-
+      await offlineStorage.saveWeatherData(weatherData);
       dispatch({ type: 'SET_WEATHER_DATA', payload: weatherData });
-      
-      // Generate smart suggestions
-      const suggestions = generateSmartSuggestions(weatherData.current);
-      dispatch({ type: 'SET_SUGGESTIONS', payload: suggestions });
 
+      const suggestions = generateSmartSuggestions(currentWeather);
+      dispatch({ type: 'SET_SUGGESTIONS', payload: suggestions });
     } catch (error) {
-      dispatch({ type: 'SET_ERROR', payload: error.message });
+      console.error('Weather fetch error:', error);
+      
+      // Try to load cached data
+      const cachedData = await offlineStorage.getWeatherData();
+      if (cachedData) {
+        console.log('Using cached weather data');
+        dispatch({ type: 'SET_WEATHER_DATA', payload: cachedData });
+      } else {
+        dispatch({ type: 'SET_ERROR', payload: error.message || 'Failed to load weather data' });
+      }
     }
-  }, [isOnline, generateSmartSuggestions]);
+  }, [generateSmartSuggestions]);
 
   useEffect(() => {
     if (location) {
@@ -158,16 +126,15 @@ export function WeatherProvider({ children }) {
     }
   }, [location, fetchWeatherData]);
 
-  // Auto-refresh every 5 minutes
   useEffect(() => {
     const interval = setInterval(() => {
-      if (location && isOnline) {
+      if (location) {
         fetchWeatherData(location.latitude, location.longitude);
       }
-    }, 300000); // 5 minutes
+    }, 300000);
 
     return () => clearInterval(interval);
-  }, [location, isOnline, fetchWeatherData]);
+  }, [location, fetchWeatherData]);
 
   const value = {
     ...state,
