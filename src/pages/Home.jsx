@@ -1,10 +1,72 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { WiDaySunny, WiCloud, WiRain, WiSnow } from 'react-icons/wi';
 import AnimatedBackground from '../components/UI/AnimatedBackground';
 
 const Home = () => {
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
+  const [isInstallable, setIsInstallable] = useState(false);
+  const [isInstalled, setIsInstalled] = useState(false);
+
+  useEffect(() => {
+    // Check if already installed
+    if (window.matchMedia('(display-mode: standalone)').matches) {
+      setIsInstalled(true);
+    }
+
+    // Listen for install prompt
+    const handler = (e) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      setIsInstallable(true);
+    };
+
+    window.addEventListener('beforeinstallprompt', handler);
+
+    // Listen for successful install
+    window.addEventListener('appinstalled', () => {
+      setIsInstalled(true);
+      setIsInstallable(false);
+      setDeferredPrompt(null);
+    });
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handler);
+    };
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) {
+      // If no prompt saved, show manual instructions
+      alert(
+        'To install Atmosync:\n\n' +
+        '• iPhone/iPad: Tap the Share button, then "Add to Home Screen"\n' +
+        '• Android: Tap the menu (⋮), then "Install app" or "Add to Home Screen"\n' +
+        '• Desktop: Click the install icon (⊕) in the address bar'
+      );
+      return;
+    }
+
+    try {
+      // Show the install prompt
+      await deferredPrompt.prompt();
+      
+      // Wait for user response
+      const { outcome } = await deferredPrompt.userChoice;
+      
+      if (outcome === 'accepted') {
+        setIsInstalled(true);
+        setIsInstallable(false);
+      }
+      
+      // Clear the saved prompt
+      setDeferredPrompt(null);
+    } catch (error) {
+      console.error('Install failed:', error);
+    }
+  };
+
   const features = [
     {
       icon: <WiDaySunny className="text-5xl text-yellow-400" />,
@@ -33,7 +95,6 @@ const Home = () => {
       <AnimatedBackground />
       
       <div className="relative z-10">
-        {/* Hero Section */}
         <motion.div
           className="min-h-screen flex flex-col items-center justify-center px-4"
           initial={{ opacity: 0 }}
@@ -64,21 +125,30 @@ const Home = () => {
                   Open Dashboard
                 </motion.button>
               </Link>
-              <motion.button
-                className="px-8 py-4 bg-white/10 backdrop-blur-md text-white rounded-2xl font-semibold text-lg border border-white/20"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => {
-                  // Trigger PWA install
-                  window.dispatchEvent(new Event('beforeinstallprompt'));
-                }}
-              >
-                Install App
-              </motion.button>
+              
+              {!isInstalled && (
+                <motion.button
+                  onClick={handleInstallClick}
+                  className="px-8 py-4 bg-white/10 backdrop-blur-md text-white rounded-2xl font-semibold text-lg border border-white/20 hover:bg-white/20 transition-colors"
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  {isInstallable ? '📲 Install App' : '📱 Add to Home Screen'}
+                </motion.button>
+              )}
+              
+              {isInstalled && (
+                <motion.div
+                  className="px-8 py-4 bg-green-500/20 backdrop-blur-md text-green-400 rounded-2xl font-semibold text-lg border border-green-500/30"
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                >
+                  ✅ App Installed
+                </motion.div>
+              )}
             </div>
           </motion.div>
 
-          {/* Features Grid */}
           <motion.div
             className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 w-full max-w-6xl mb-20"
             initial={{ y: 50, opacity: 0 }}
@@ -99,7 +169,6 @@ const Home = () => {
             ))}
           </motion.div>
 
-          {/* Stats */}
           <motion.div
             className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center mb-20"
             initial={{ opacity: 0 }}
