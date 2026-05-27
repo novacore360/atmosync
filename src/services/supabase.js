@@ -7,97 +7,59 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
-    detectSessionInUrl: true,
+    detectSessionInUrl: true
   },
   realtime: {
     params: {
-      eventsPerSecond: 10,
-    },
-  },
+      eventsPerSecond: 10
+    }
+  }
 });
 
-// Auth helper functions
 export const auth = {
   signUp: async (email, password) => {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-    });
+    const { data, error } = await supabase.auth.signUp({ email, password });
     return { data, error };
   },
-
   signIn: async (email, password) => {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     return { data, error };
   },
-
   signOut: async () => {
     const { error } = await supabase.auth.signOut();
     return { error };
   },
-
   getUser: async () => {
-    const { data: { user }, error } = await supabase.auth.getUser();
-    return { user, error };
-  },
+    const { data, error } = await supabase.auth.getUser();
+    return { user: data?.user, error };
+  }
 };
 
-// Database helper functions
 export const db = {
-  // Goals
   saveGoal: async (goal) => {
-    const { data, error } = await supabase
-      .from('goals')
-      .upsert(goal)
-      .select();
+    const { data, error } = await supabase.from('goals').upsert(goal).select();
     return { data, error };
   },
-
   getGoals: async (userId) => {
-    const { data, error } = await supabase
-      .from('goals')
-      .select('*')
-      .eq('user_id', userId);
+    const { data, error } = await supabase.from('goals').select('*').eq('user_id', userId);
     return { data, error };
   },
-
-  // Weather History
   saveWeatherHistory: async (history) => {
-    const { data, error } = await supabase
-      .from('weather_history')
-      .insert(history)
-      .select();
+    const { data, error } = await supabase.from('weather_history').insert(history).select();
     return { data, error };
   },
-
-  getWeatherHistory: async (userId, limit = 30) => {
-    const { data, error } = await supabase
-      .from('weather_history')
-      .select('*')
-      .eq('user_id', userId)
-      .order('timestamp', { ascending: false })
-      .limit(limit);
+  getWeatherHistory: async (userId, limit) => {
+    const query = supabase.from('weather_history').select('*').eq('user_id', userId).order('timestamp', { ascending: false });
+    if (limit) query.limit(limit);
+    const { data, error } = await query;
     return { data, error };
   },
-
-  // User Preferences
   savePreferences: async (userId, preferences) => {
-    const { data, error } = await supabase
-      .from('profiles')
-      .upsert({ id: userId, preferences })
-      .select();
+    const { data, error } = await supabase.from('profiles').upsert({ id: userId, preferences }).select();
     return { data, error };
   },
-
   getPreferences: async (userId) => {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('preferences')
-      .eq('id', userId)
-      .single();
+    const { data, error } = await supabase.from('profiles').select('preferences').eq('id', userId).single();
     return { data, error };
-  },
+  }
 };
